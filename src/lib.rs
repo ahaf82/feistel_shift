@@ -1,202 +1,104 @@
 use std::error::Error;
 use std::io;
-use std::process;
 
-pub fn get_input_values() -> Result<(), Box<dyn Error>> {
-    // get binary input value
-    let mut binary_input_value = get_binary_string_parameter(
-        String::from("Gib eine Binärzahl ein, mit einer geraden Anzahl an Zeichen ein: "),
-        0,
-    );
-    // rounds
-    let rounds =
-        get_single_input_integer_parameter(String::from("Anzahl Verschlüsselungsrunden: "));
-    // function
-    let shift_function = get_enum_function_input(String::from(
-        "Shift-Funktion (1 für Left Shift, 2 für Right Shift): ",
-    ));
-    // shift_count
-    let shift_count = get_single_input_integer_parameter(String::from("Anzahl Shift-Schritte: "));
-    // key_values rounds depending on rounds
-    let half_length: u32 = binary_input_value.len().try_into().unwrap();
-    let key_value = get_binary_string_parameter(String::from(
-		"Schlüsselwert (Binärwert in halber Zeichen-Länge wie zu codierender Eingabewert notwendig): ",
-	), half_length/2);
+#[derive(Debug)] // so it's printable
+struct Parameters {
+    message: String,
+    n_rounds: u32,
+    shift_direction: ShiftValues,
+    shift_distance: u32,
+    key: String,
+}
 
-    println!(
-        "Eingabewert: {}, Rundenanzahl: {}, Shiftfunktion: {:?}, Shiftweite: {}, Schlüsselwert: {}",
-        binary_input_value, rounds, shift_function, shift_count, key_value
-    );
-
-    println!("key_val:                   {}", key_value);
-
-    // let left_side = get_left_side(&binary_input_value);
-    // println!("left side of string {}", left_side);
-    // let right_side = get_right_side(&binary_input_value);
-    // println!("right side of string {}", right_side);
-    // let concatenated_strings = concat_strings(&left_side, &right_side);
-    // println!("concatenation of string {}", concatenated_strings);
-
-    for n in 0..rounds {
-        binary_input_value =
-            single_encryption_round(binary_input_value, &shift_function, shift_count, &key_value);
-        println!("after {} round:          {}", n + 1, binary_input_value);
+pub fn interactive_feistel() -> Result<(), Box<dyn Error>> {
+    let params = get_input_values();
+    println!("{:?}", params);
+    let mut result = params.message.clone();
+    for i_round in 0..params.n_rounds {
+        result = feistel_round(
+            &result,
+            &params.shift_direction,
+            params.shift_distance,
+            &params.key,
+        );
+        println!("after round {}:          {}", i_round + 1, result);
     }
-
-    binary_input_value = swap_sides_of_binary(binary_input_value);
-    println!("after final swap:       {}", binary_input_value);
+    result = swap_sides_of_binary(result);
+    println!("after final swap:       {}", result);
     Ok(())
 }
 
+fn get_input_values() -> Parameters {
+    let message = get_binary_string("Enter binary number with even number of bits: ");
+    let n_rounds = get_integer("Enter number of rounds: ");
+    let shift_direction = get_enum_function_input("Enter shift direction (1: <<, 2: >>): ");
+    let shift_distance = get_integer("Enter shift distance: ");
+    let half_length = message.len() / 2;
+    let prompt = format!("Enter key (must be {half_length} bits long): ");
+    let key = get_binary_string_of_length(&prompt, half_length);
+
+    Parameters {
+        message,
+        n_rounds,
+        shift_direction,
+        shift_distance,
+        key,
+    }
+}
+
 /* function output single_run */
-pub fn get_single_input_integer_parameter(input_message: String) -> u32 {
+pub fn get_integer(prompt: &str) -> u32 {
     let mut input = String::new();
-
     loop {
-        println!("{}", &input_message);
+        println!("{prompt}");
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
-
-        if input.trim() == "abcd" {
-            process::exit(1)
-        }
-
-        let is_allowed_input = check_if_input_is_integer(&input);
-
-        if input.trim() != "" && is_allowed_input == true {
-            // println!("Bitte gib einen Wert ein");
-            break;
-        }
-
-        println!("Das war keine Integerzahl, bitte nochmal!");
+        let trimmed = input.trim();
+        match trimmed.parse::<u32>() {
+            Ok(i) => break i,
+            Err(..) => println!("Given number is not an integer."),
+        };
     }
-
-    let output_value: u32 = input.trim().parse().unwrap();
-
-    output_value
 }
 
-pub fn check_if_input_is_integer(input: &String) -> bool {
-    let mut integer_input = true;
-    for c in input.trim().chars() {
-        if c != '0'
-            && c != '1'
-            && c != '2'
-            && c != '3'
-            && c != '4'
-            && c != '5'
-            && c != '6'
-            && c != '7'
-            && c != '8'
-            && c != '9'
-        {
-            integer_input = false
-        }
-    }
-    integer_input
-}
-
-pub fn get_binary_string_parameter(input_message: String, needed_length: u32) -> String {
+fn get_binary_string(prompt: &str) -> String {
     let mut input = String::new();
-
     loop {
-        println!("{}", &input_message);
+        println!("{prompt}");
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
-
-        if input.trim() == "abcd" {
-            process::exit(1)
-        }
-
-        if input_is_valid(&input, needed_length) {
-            println!("Bitte gib einen Wert ein");
-            break;
+        let trimmed = input.trim();
+        if !trimmed.is_empty() && trimmed.chars().all(|x| '0' == x || x == '1') {
+            break trimmed.to_string();
+        } else {
+            println!("Input must contain only 0s and 1s.")
         }
     }
-
-    let output_value: String = input.trim().to_string();
-
-    output_value
 }
 
-pub fn input_is_valid(input: &str, needed_length: u32) -> bool {
-    if input.trim() != ""
-        && check_if_input_is_binary(input)
-        && check_if_input_has_allowed_length(input, needed_length)
-    {
-        return true;
-    }
-    false
-}
-
-pub fn check_if_input_is_binary(input: &str) -> bool {
-    let mut binary_input = true;
-    for c in input.trim().chars() {
-        if c != '0' && c != '1' {
-            binary_input = false
+fn get_binary_string_of_length(prompt: &str, expected_length: usize) -> String {
+    loop {
+        let input = get_binary_string(prompt);
+        if input.len() == expected_length {
+            break input;
+        } else {
+            println!("Input must have {expected_length} characters.")
         }
     }
-    if binary_input == false {
-        println!("Das war keine Binärzahl, bitte nochmal!");
-    }
-    binary_input
 }
 
-pub fn check_if_input_has_allowed_length(input: &str, needed_length: u32) -> bool {
-    if needed_length == 0 && input.trim().len() % 2 == 1 {
-        println!(
-            "Bitte gib eine {}-stellige Anzahl an Zeichen ein!",
-            needed_length
-        );
-        return false;
-    }
-    if needed_length != 0 && input.trim().len() != needed_length.try_into().unwrap() {
-        println!(
-            "Bitte gib benötigte Anzahl an Zeichen {} ein!",
-            needed_length
-        );
-        println!("Input: {}", input);
-        return false;
-    }
-    true
-}
-
-pub fn get_single_input_string_parameter(input_message: String) -> String {
+fn get_enum_function_input(prompt: &str) -> ShiftValues {
     let mut input = String::new();
 
     loop {
-        println!("{}", &input_message);
+        println!("{prompt}");
 
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
 
-        if input.trim() == "abcd" {
-            process::exit(1);
-        }
-        if input.trim() != "" {
-            break;
-        }
-    }
-
-    input.trim().to_string()
-}
-
-pub fn get_enum_function_input(input_message: String) -> ShiftValues {
-    let mut input = String::new();
-
-    loop {
-        println!("{}", &input_message);
-
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        if input.trim() == "abcd" {
-            process::exit(1);
-        }
         if input.trim() == "1" {
             break ShiftValues::LeftShift;
         }
@@ -206,7 +108,7 @@ pub fn get_enum_function_input(input_message: String) -> ShiftValues {
     }
 }
 
-pub fn get_left_side(input: &str) -> String {
+fn get_left_side(input: &str) -> String {
     let mut new_string = String::from("");
     for i in 0..=(input.len() - 1) / 2 {
         let push_string =
@@ -216,7 +118,7 @@ pub fn get_left_side(input: &str) -> String {
     new_string
 }
 
-pub fn get_right_side(input: &str) -> String {
+fn get_right_side(input: &str) -> String {
     let mut new_string = String::from("");
     for i in ((input.len() - 1) / 2) + 1..=input.len() - 1 {
         let push_string =
@@ -226,15 +128,14 @@ pub fn get_right_side(input: &str) -> String {
     new_string
 }
 
-pub fn concat_strings(input_first: &str, input_second: &str) -> String {
+fn concat_strings(input_first: &str, input_second: &str) -> String {
     let mut new_string = String::from("");
     new_string.push_str(input_first);
     new_string.push_str(input_second);
     new_string
 }
 
-// function left_shift(value, shift_count)
-pub fn left_shift(value: &String, shift_count: u32) -> String {
+fn left_shift(value: &String, shift_count: u32) -> String {
     let intval = isize::from_str_radix(&value, 2).unwrap();
     let left_shifted_value = intval << shift_count;
     let mut left_shifted_binary = format!("{:b}", left_shifted_value).trim().to_string();
@@ -251,8 +152,7 @@ pub fn left_shift(value: &String, shift_count: u32) -> String {
     left_shifted_binary
 }
 
-// function right_shift(value, shift_count)
-pub fn right_shift(value: &String, shift_count: u32) -> String {
+fn right_shift(value: &String, shift_count: u32) -> String {
     let intval = isize::from_str_radix(&value, 2).unwrap();
     let right_shifted_value = intval >> shift_count;
     let mut right_shifted_binary = format!("{:b}", right_shifted_value).trim().to_string();
@@ -263,9 +163,8 @@ pub fn right_shift(value: &String, shift_count: u32) -> String {
     right_shifted_binary
 }
 
-// function x_or(value_one, value_two)
-pub fn xor_binary_values(binary_value_1: &String, binary_value_2: &String) -> String {
-    let mut xor_value = String::from("");
+fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
+    let mut xor_value = String::new();
     for i in 0..=binary_value_1.len() - 1 {
         let left_side =
             isize::from_str_radix(&String::from(binary_value_1.chars().nth(i).unwrap()), 2)
@@ -283,8 +182,7 @@ pub fn xor_binary_values(binary_value_1: &String, binary_value_2: &String) -> St
     xor_value
 }
 
-// function swap_sides(value)
-pub fn swap_sides_of_binary(binary_string: String) -> String {
+fn swap_sides_of_binary(binary_string: String) -> String {
     let mut string_to_swap = binary_string.to_owned();
     for _ in 0..(&binary_string.len() / 2) {
         let last_char = string_to_swap[string_to_swap.len() - 1..string_to_swap.len()].to_owned();
@@ -297,23 +195,22 @@ pub fn swap_sides_of_binary(binary_string: String) -> String {
     string_to_swap.to_owned()
 }
 
-// single encryption round
-pub fn single_encryption_round(
-    binary_input_value: String,
+fn feistel_round(
+    message: &str,
     shift_direction: &ShiftValues,
-    shift_count: u32,
-    key_value: &String,
+    shift_distance: u32,
+    key: &str,
 ) -> String {
-    let mut left_side = get_left_side(&binary_input_value);
+    let mut left_side = get_left_side(message);
     println!("left side of string        {}", left_side);
-    let right_side = get_right_side(&binary_input_value);
+    let right_side = get_right_side(message);
     println!("right side of string       {}", right_side);
     let mut string_to_swap: String;
     match shift_direction {
-        ShiftValues::LeftShift => string_to_swap = left_shift(&right_side, shift_count),
-        ShiftValues::RightShift => string_to_swap = right_shift(&right_side, shift_count),
+        ShiftValues::LeftShift => string_to_swap = left_shift(&right_side, shift_distance),
+        ShiftValues::RightShift => string_to_swap = right_shift(&right_side, shift_distance),
     }
-    string_to_swap = xor_binary_values(&string_to_swap, &key_value);
+    string_to_swap = xor_binary_values(&string_to_swap, key);
     left_side = xor_binary_values(&left_side, &string_to_swap);
     let concatenated_strings = concat_strings(&left_side, &right_side);
     println!("concatenation of string {}", concatenated_strings);

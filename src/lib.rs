@@ -222,3 +222,64 @@ pub enum ShiftValues {
     LeftShift,
     RightShift,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shift_left_test() {
+        let test_string = String::from("010100101");
+        let left_shifted_value: String = left_shift(&test_string, 2);
+        assert_eq!(left_shifted_value, "010010100");
+    }
+
+    #[test]
+    fn shift_right_test() {
+        let test_string = String::from("010100101");
+        let right_shifted_value: String = right_shift(&test_string, 2);
+        assert_eq!(right_shifted_value, "000101001");
+    }
+
+    #[test]
+    fn swap_sides_test() {
+        let test_string = String::from("01011101");
+        let swap_sides_value: String = swap_sides_of_binary(test_string);
+        assert_eq!(swap_sides_value, "11010101");
+    }
+
+    #[test]
+    fn xor_test() {
+        let test_string1 = String::from("01011101");
+        let test_string2 = String::from("11110111");
+        let xored_value: String = xor_binary_values(&test_string1, &test_string2);
+        assert_eq!(xored_value, "10101010");
+    }
+
+    #[test]
+    fn concat_strings_test() {
+        let test_string1 = String::from("01011101");
+        let test_string2 = String::from("11110111");
+        let concatenated_string: String = concat_strings(&test_string1, &test_string2);
+        assert_eq!(concatenated_string, "0101110111110111");
+    }
+
+    #[test]
+    fn get_sides_test() {
+        let test_string = String::from("0101110111110111");
+        let left_side_of_string: String = get_left_side(&test_string);
+        let right_side_of_string: String = get_right_side(&test_string);
+        assert_eq!(left_side_of_string, "01011101");
+        assert_eq!(right_side_of_string, "11110111");
+    }
+
+    #[test]
+    fn feistel_round_test() {
+        let test_string = String::from("01011101");
+        let feistel_round_result: String =
+            feistel_round(&test_string, &ShiftValues::LeftShift, 2, "1001");
+        assert_eq!(feistel_round_result, "11011000");
+    }
+
+    
+}

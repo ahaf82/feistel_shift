@@ -118,7 +118,17 @@ fn get_left_side(input: &str) -> String {
     new_string
 }
 
-fn get_right_side(input: &str) -> String {
+/// Gets the second half of a string
+///
+/// # Example
+///
+/// ```
+/// let test_string = String::from("01000101");
+/// let right_side_value: String = feistel_shift::get_right_side(&test_string);
+///
+/// assert_eq!(right_side_value, "0101");
+/// ```
+pub fn get_right_side(input: &str) -> String {
     let mut new_string = String::from("");
     for i in ((input.len() - 1) / 2) + 1..=input.len() - 1 {
         let push_string =
@@ -128,14 +138,35 @@ fn get_right_side(input: &str) -> String {
     new_string
 }
 
-fn concat_strings(input_first: &str, input_second: &str) -> String {
+/// Returns the concatenation of two strings
+///
+/// # Example
+///
+/// ```
+/// let test_string1 = String::from("01011101");
+/// let test_string2 = String::from("11110111");
+/// let concatenated_string: String = feistel_shift::concat_strings(&test_string1, &test_string2);
+///
+/// assert_eq!(concatenated_string, "0101110111110111");
+/// ```
+pub fn concat_strings(input_first: &str, input_second: &str) -> String {
     let mut new_string = String::from("");
     new_string.push_str(input_first);
     new_string.push_str(input_second);
     new_string
 }
 
-fn left_shift(value: &String, shift_count: u32) -> String {
+/// Returns the result of a string, shifted to the left by a given unsigned integer value
+///
+/// # Example
+///
+/// ```
+/// let test_string = String::from("010100101");
+/// let left_shifted_value: String = feistel_shift::left_shift(&test_string, 2);
+///
+/// assert_eq!(left_shifted_value, "010010100");
+/// ```
+pub fn left_shift(value: &String, shift_count: u32) -> String {
     let intval = isize::from_str_radix(&value, 2).unwrap();
     let left_shifted_value = intval << shift_count;
     let mut left_shifted_binary = format!("{:b}", left_shifted_value).trim().to_string();
@@ -152,7 +183,17 @@ fn left_shift(value: &String, shift_count: u32) -> String {
     left_shifted_binary
 }
 
-fn right_shift(value: &String, shift_count: u32) -> String {
+/// Returns the result of a string, shifted to the right by a given unsigned integer value
+///
+/// # Example
+///
+/// ```
+/// let test_string = String::from("010100101");
+/// let right_shifted_value: String = feistel_shift::right_shift(&test_string, 2);
+///
+/// assert_eq!(right_shifted_value, "000101001");
+/// ```
+pub fn right_shift(value: &String, shift_count: u32) -> String {
     let intval = isize::from_str_radix(&value, 2).unwrap();
     let right_shifted_value = intval >> shift_count;
     let mut right_shifted_binary = format!("{:b}", right_shifted_value).trim().to_string();
@@ -163,7 +204,18 @@ fn right_shift(value: &String, shift_count: u32) -> String {
     right_shifted_binary
 }
 
-fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
+/// Returns the xor value of two binary strings
+///
+/// # Example
+///
+/// ```
+/// let test_string1 = String::from("01011101");
+/// let test_string2 = String::from("11110111");
+/// let xored_value: String = feistel_shift::xor_binary_values(&test_string1, &test_string2);
+///
+/// assert_eq!(xored_value, "10101010");
+/// ```
+pub fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
     let mut xor_value = String::new();
     for i in 0..=binary_value_1.len() - 1 {
         let left_side =
@@ -172,17 +224,24 @@ fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
         let right_side =
             isize::from_str_radix(&String::from(binary_value_2.chars().nth(i).unwrap()), 2)
                 .unwrap();
-        // println!("left side {}", left_side);
-        // println!("rigth side {}", right_side);
         xor_value.push_str(&format!("{:b}", left_side ^ right_side));
     }
-    // println!("shifted value:        {}", binary_value_1);
     println!("key or left-side value:    {}", binary_value_2);
     println!("x-ored value:              {}", xor_value);
     xor_value
 }
 
-fn swap_sides_of_binary(binary_string: String) -> String {
+/// Swaps the first and the second half of a given string
+///
+/// # Example
+///
+/// ```
+/// let test_string = String::from("01011101");
+/// let swap_sides_value: String = feistel_shift::swap_sides_of_binary(test_string);
+///
+/// assert_eq!(swap_sides_value, "11010101");
+/// ```
+pub fn swap_sides_of_binary(binary_string: String) -> String {
     let mut string_to_swap = binary_string.to_owned();
     for _ in 0..(&binary_string.len() / 2) {
         let last_char = string_to_swap[string_to_swap.len() - 1..string_to_swap.len()].to_owned();
@@ -195,7 +254,18 @@ fn swap_sides_of_binary(binary_string: String) -> String {
     string_to_swap.to_owned()
 }
 
-fn feistel_round(
+/// Returns a string after the process of one round of the feistel algorithm, where the input is a string,the
+/// function (left or a right shift and the shift distance)
+///
+/// # Example
+///
+/// ```
+/// let test_string = String::from("01011101");
+/// let feistel_round_result: String = feistel_shift::feistel_round(&test_string, &feistel_shift::ShiftValues::LeftShift, 2, "1001");
+///
+/// assert_eq!(feistel_round_result, "11011000");
+/// ```
+pub fn feistel_round(
     message: &str,
     shift_direction: &ShiftValues,
     shift_distance: u32,
@@ -228,43 +298,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shift_left_test() {
-        let test_string = String::from("010100101");
-        let left_shifted_value: String = left_shift(&test_string, 2);
-        assert_eq!(left_shifted_value, "010010100");
-    }
-
-    #[test]
-    fn shift_right_test() {
-        let test_string = String::from("010100101");
-        let right_shifted_value: String = right_shift(&test_string, 2);
-        assert_eq!(right_shifted_value, "000101001");
-    }
-
-    #[test]
-    fn swap_sides_test() {
-        let test_string = String::from("01011101");
-        let swap_sides_value: String = swap_sides_of_binary(test_string);
-        assert_eq!(swap_sides_value, "11010101");
-    }
-
-    #[test]
-    fn xor_test() {
-        let test_string1 = String::from("01011101");
-        let test_string2 = String::from("11110111");
-        let xored_value: String = xor_binary_values(&test_string1, &test_string2);
-        assert_eq!(xored_value, "10101010");
-    }
-
-    #[test]
-    fn concat_strings_test() {
-        let test_string1 = String::from("01011101");
-        let test_string2 = String::from("11110111");
-        let concatenated_string: String = concat_strings(&test_string1, &test_string2);
-        assert_eq!(concatenated_string, "0101110111110111");
-    }
-
-    #[test]
     fn get_sides_test() {
         let test_string = String::from("0101110111110111");
         let left_side_of_string: String = get_left_side(&test_string);
@@ -272,14 +305,4 @@ mod tests {
         assert_eq!(left_side_of_string, "01011101");
         assert_eq!(right_side_of_string, "11110111");
     }
-
-    #[test]
-    fn feistel_round_test() {
-        let test_string = String::from("01011101");
-        let feistel_round_result: String =
-            feistel_round(&test_string, &ShiftValues::LeftShift, 2, "1001");
-        assert_eq!(feistel_round_result, "11011000");
-    }
-
-    
 }

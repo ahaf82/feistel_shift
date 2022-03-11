@@ -24,7 +24,7 @@ pub fn feistel(params: Parameters) -> Result<(), Box<dyn Error>> {
             |x| (params.shift_function)(x, params.shift_distance),
             &params.key,
         );
-        println!("{:<32}{}", format!("after round {}", i_round + 1), result);
+        println!("{:<32}{}", format!("after round {}:", i_round + 1), result);
     }
     result = swap_sides_of_binary(result);
     println!("{:<32}{}", "final swap:", result);
@@ -34,7 +34,7 @@ pub fn feistel(params: Parameters) -> Result<(), Box<dyn Error>> {
 fn get_input_values() -> Parameters {
     let message = get_binary_string("Enter binary number with even number of bits: ");
     let n_rounds = get_integer("Enter number of rounds: ");
-    let shift_function = get_shift_function("Enter shift direction\n[1] left\n[2] right): ");
+    let shift_function = get_shift_function("Enter shift direction\n[1] left\n[2] right\n");
     let shift_distance = get_integer("Enter shift distance: ");
     let half_length = message.len() / 2;
     let prompt = format!("Enter key (must be {half_length} bits long): ");

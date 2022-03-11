@@ -1,37 +1,40 @@
 use std::error::Error;
 use std::io;
 
-#[derive(Debug)] // so it's printable
-struct Parameters {
+//#[derive(Debug)] // so it's printable
+pub struct Parameters {
     message: String,
     n_rounds: u32,
-    shift_direction: ShiftValues,
+    shift_function: fn(u32, u32) -> Option<u32>,
     shift_distance: u32,
     key: String,
 }
 
 pub fn interactive_feistel() -> Result<(), Box<dyn Error>> {
     let params = get_input_values();
-    println!("{:?}", params);
+    // println!("{:?}", params); // TODO for function member
+    feistel(params)
+}
+
+pub fn feistel(params: Parameters) -> Result<(), Box<dyn Error>> {
     let mut result = params.message.clone();
     for i_round in 0..params.n_rounds {
-        result = feistel_round(
+        result = feistel_round_numeric(
             &result,
-            &params.shift_direction,
-            params.shift_distance,
+            |x| (params.shift_function)(x, params.shift_distance),
             &params.key,
         );
-        println!("after round {}:          {}", i_round + 1, result);
+        println!("{:<32}{}", format!("after round {}", i_round + 1), result);
     }
     result = swap_sides_of_binary(result);
-    println!("after final swap:       {}", result);
+    println!("{:<32}{}", "final swap:", result);
     Ok(())
 }
 
 fn get_input_values() -> Parameters {
     let message = get_binary_string("Enter binary number with even number of bits: ");
     let n_rounds = get_integer("Enter number of rounds: ");
-    let shift_direction = get_enum_function_input("Enter shift direction (1: <<, 2: >>): ");
+    let shift_function = get_shift_function("Enter shift direction\n[1] left\n[2] right): ");
     let shift_distance = get_integer("Enter shift distance: ");
     let half_length = message.len() / 2;
     let prompt = format!("Enter key (must be {half_length} bits long): ");
@@ -40,22 +43,25 @@ fn get_input_values() -> Parameters {
     Parameters {
         message,
         n_rounds,
-        shift_direction,
+        shift_function,
         shift_distance,
         key,
     }
 }
 
-/* function output single_run */
-pub fn get_integer(prompt: &str) -> u32 {
+fn get_user_input(prompt: &str) -> String {
     let mut input = String::new();
+    println!("{prompt}");
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+    input.trim().to_string()
+}
+
+fn get_integer(prompt: &str) -> u32 {
     loop {
-        println!("{prompt}");
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        let trimmed = input.trim();
-        match trimmed.parse::<u32>() {
+        let answer = get_user_input(prompt);
+        match answer.parse::<u32>() {
             Ok(i) => break i,
             Err(..) => println!("Given number is not an integer."),
         };
@@ -63,59 +69,104 @@ pub fn get_integer(prompt: &str) -> u32 {
 }
 
 fn get_binary_string(prompt: &str) -> String {
-    let mut input = String::new();
     loop {
-        println!("{prompt}");
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        let trimmed = input.trim();
-        if !trimmed.is_empty() && trimmed.chars().all(|x| '0' == x || x == '1') {
-            break trimmed.to_string();
-        } else {
+        let answer = get_user_input(prompt);
+        if answer.is_empty() {
+            println!("Input must not be empty.")
+        } else if !answer.chars().all(|x| '0' == x || x == '1') {
             println!("Input must contain only 0s and 1s.")
+        } else if answer.len() % 2 == 1 {
+            println!("Input must be of even length.")
+        } else {
+            break answer;
         }
     }
 }
 
 fn get_binary_string_of_length(prompt: &str, expected_length: usize) -> String {
     loop {
-        let input = get_binary_string(prompt);
-        if input.len() == expected_length {
-            break input;
+        let answer = get_binary_string(prompt);
+        if answer.len() == expected_length {
+            break answer;
         } else {
             println!("Input must have {expected_length} characters.")
         }
     }
 }
 
-fn get_enum_function_input(prompt: &str) -> ShiftValues {
-    let mut input = String::new();
-
+fn get_shift_direction(prompt: &str) -> Direction {
     loop {
-        println!("{prompt}");
-
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        if input.trim() == "1" {
-            break ShiftValues::LeftShift;
-        }
-        if input.trim() == "2" {
-            break ShiftValues::RightShift;
+        let answer = get_user_input(prompt);
+        match answer.as_str() {
+            "1" => break Direction::Left,
+            "2" => break Direction::Right,
+            _ => println!("Wrong input."),
         }
     }
 }
 
-fn get_left_side(input: &str) -> String {
-    let mut new_string = String::from("");
-    for i in 0..=(input.len() - 1) / 2 {
-        let push_string =
-            isize::from_str_radix(&String::from(input.chars().nth(i).unwrap()), 2).unwrap();
-        new_string.push_str(&format!("{}", push_string));
+fn get_shift_function(prompt: &str) -> fn(u32, u32) -> Option<u32> {
+    loop {
+        let answer = get_user_input(prompt);
+        match answer.as_str() {
+            "1" => break u32::checked_shl,
+            "2" => break u32::checked_shr,
+            _ => println!("Wrong input."),
+        }
     }
-    new_string
+}
+
+fn feistel_round(
+    message: &str,
+    shift_direction: Direction,
+    shift_distance: usize,
+    key: &str,
+) -> String {
+    let half_length = message.len() / 2;
+    let (left, right) = message.split_at(half_length);
+    println!("{:<32?}", left);
+    println!("{:<32?}", right);
+    let mut string_to_swap: String;
+    match shift_direction {
+        Direction::Left => string_to_swap = shift_left(right, shift_distance),
+        Direction::Right => string_to_swap = shift_right(right, shift_distance),
+    }
+    string_to_swap = xor(&string_to_swap, key);
+    let new_right = xor(left, &string_to_swap);
+    println!("{:<32}{}{}", "before swap:", new_right, right);
+    right.to_owned() + &new_right
+}
+
+fn feistel_round_numeric<F>(message: &str, function: F, key: &str) -> String
+where
+    F: Fn(u32) -> Option<u32>,
+{
+    let half_length = message.len() / 2;
+    let (left, right) = message.split_at(half_length);
+    let numeric_left = u32::from_str_radix(left, 2).unwrap();
+    let numeric_right = u32::from_str_radix(right, 2).unwrap();
+    let numeric_key = u32::from_str_radix(key, 2).unwrap();
+    let transformed_right = function(numeric_right).unwrap() ^ numeric_key;
+    let transformed_left = numeric_left ^ transformed_right;
+
+    let transformed_right_string =
+        format!("{:032b}", transformed_right)[32 - half_length..].to_string();
+    let transformed_left_string =
+        format!("{:032b}", transformed_left)[32 - half_length..].to_string();
+
+    println!("{:<32}{}", "F(right) XOR key:", transformed_right_string);
+    println!(
+        "{:<32}{}",
+        "left XOR F(right) XOR key:", transformed_left_string
+    );
+
+    println!("{:<32}{}{}", "before swap:", transformed_left_string, right);
+
+    right.to_owned() + &transformed_left_string
+}
+
+fn get_left_side(input: &str) -> String {
+    input[..(input.len() / 2)].to_owned()
 }
 
 /// Gets the second half of a string
@@ -129,13 +180,7 @@ fn get_left_side(input: &str) -> String {
 /// assert_eq!(right_side_value, "0101");
 /// ```
 pub fn get_right_side(input: &str) -> String {
-    let mut new_string = String::from("");
-    for i in ((input.len() - 1) / 2) + 1..=input.len() - 1 {
-        let push_string =
-            isize::from_str_radix(&String::from(input.chars().nth(i).unwrap()), 2).unwrap();
-        new_string.push_str(&format!("{}", push_string));
-    }
-    new_string
+    input[(input.len() / 2)..].to_owned()
 }
 
 /// Returns the concatenation of two strings
@@ -162,25 +207,17 @@ pub fn concat_strings(input_first: &str, input_second: &str) -> String {
 ///
 /// ```
 /// let test_string = String::from("010100101");
-/// let left_shifted_value: String = feistel_shift::left_shift(&test_string, 2);
+/// let left_shifted_value: String = feistel_shift::shift_left(&test_string, 2);
 ///
 /// assert_eq!(left_shifted_value, "010010100");
 /// ```
-pub fn left_shift(value: &String, shift_count: u32) -> String {
-    let intval = isize::from_str_radix(&value, 2).unwrap();
-    let left_shifted_value = intval << shift_count;
-    let mut left_shifted_binary = format!("{:b}", left_shifted_value).trim().to_string();
-    if left_shifted_binary.len() > value.len() {
-        for _ in 1..=left_shifted_binary.len() - value.len() {
-            left_shifted_binary.remove(0);
-        }
+pub fn shift_left(value: &str, shift_count: usize) -> String {
+    if shift_count < value.len() {
+        let padding = "0".repeat(shift_count as usize);
+        value[shift_count..].to_string() + &padding
     } else {
-        for _ in 1..=value.len() - left_shifted_binary.len() {
-            left_shifted_binary = String::from("0") + &left_shifted_binary;
-        }
+        "0".repeat(value.len())
     }
-    println!("left shifted right_side:   {}", left_shifted_binary);
-    left_shifted_binary
 }
 
 /// Returns the result of a string, shifted to the right by a given unsigned integer value
@@ -189,19 +226,17 @@ pub fn left_shift(value: &String, shift_count: u32) -> String {
 ///
 /// ```
 /// let test_string = String::from("010100101");
-/// let right_shifted_value: String = feistel_shift::right_shift(&test_string, 2);
+/// let right_shifted_value: String = feistel_shift::shift_right(&test_string, 2);
 ///
 /// assert_eq!(right_shifted_value, "000101001");
 /// ```
-pub fn right_shift(value: &String, shift_count: u32) -> String {
-    let intval = isize::from_str_radix(&value, 2).unwrap();
-    let right_shifted_value = intval >> shift_count;
-    let mut right_shifted_binary = format!("{:b}", right_shifted_value).trim().to_string();
-    for _ in 1..=(value.len() - right_shifted_binary.len()) {
-        right_shifted_binary = String::from("0") + &right_shifted_binary;
+pub fn shift_right(value: &str, shift_count: usize) -> String {
+    if shift_count < value.len() {
+        let padding = "0".repeat(shift_count as usize);
+        padding + &value[0..(value.len() - shift_count)]
+    } else {
+        "0".repeat(value.len())
     }
-    println!("right shifted right_side:  {}", right_shifted_binary);
-    right_shifted_binary
 }
 
 /// Returns the xor value of two binary strings
@@ -209,26 +244,22 @@ pub fn right_shift(value: &String, shift_count: u32) -> String {
 /// # Example
 ///
 /// ```
-/// let test_string1 = String::from("01011101");
-/// let test_string2 = String::from("11110111");
-/// let xored_value: String = feistel_shift::xor_binary_values(&test_string1, &test_string2);
+/// let left = String::from("01011101");
+/// let right = String::from("11110111");
+/// let res: String = feistel_shift::xor(&left, &right);
 ///
-/// assert_eq!(xored_value, "10101010");
+/// assert_eq!(res, "10101010");
 /// ```
-pub fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
-    let mut xor_value = String::new();
-    for i in 0..=binary_value_1.len() - 1 {
-        let left_side =
-            isize::from_str_radix(&String::from(binary_value_1.chars().nth(i).unwrap()), 2)
-                .unwrap();
-        let right_side =
-            isize::from_str_radix(&String::from(binary_value_2.chars().nth(i).unwrap()), 2)
-                .unwrap();
-        xor_value.push_str(&format!("{:b}", left_side ^ right_side));
+pub fn xor(left: &str, right: &str) -> String {
+    let mut result = String::with_capacity(left.len());
+    for pair in left.chars().zip(right.chars()) {
+        let (a, b) = pair;
+        println!("{a} {b}");
+        let bit = a != b; // mimics xor for each bit
+        result.push(char::from_digit(bit as u32, 2).unwrap());
+        println!("{result}");
     }
-    println!("key or left-side value:    {}", binary_value_2);
-    println!("x-ored value:              {}", xor_value);
-    xor_value
+    result
 }
 
 /// Swaps the first and the second half of a given string
@@ -242,55 +273,15 @@ pub fn xor_binary_values(binary_value_1: &str, binary_value_2: &str) -> String {
 /// assert_eq!(swap_sides_value, "11010101");
 /// ```
 pub fn swap_sides_of_binary(binary_string: String) -> String {
-    let mut string_to_swap = binary_string.to_owned();
-    for _ in 0..(&binary_string.len() / 2) {
-        let last_char = string_to_swap[string_to_swap.len() - 1..string_to_swap.len()].to_owned();
-        string_to_swap = format!(
-            "{}{}",
-            last_char.to_owned(),
-            &string_to_swap[0..string_to_swap.len() - 1]
-        );
-    }
-    string_to_swap.to_owned()
-}
-
-/// Returns a string after the process of one round of the feistel algorithm, where the input is a string,the
-/// function (left or a right shift and the shift distance)
-///
-/// # Example
-///
-/// ```
-/// let test_string = String::from("01011101");
-/// let feistel_round_result: String = feistel_shift::feistel_round(&test_string, &feistel_shift::ShiftValues::LeftShift, 2, "1001");
-///
-/// assert_eq!(feistel_round_result, "11011000");
-/// ```
-pub fn feistel_round(
-    message: &str,
-    shift_direction: &ShiftValues,
-    shift_distance: u32,
-    key: &str,
-) -> String {
-    let mut left_side = get_left_side(message);
-    println!("left side of string        {}", left_side);
-    let right_side = get_right_side(message);
-    println!("right side of string       {}", right_side);
-    let mut string_to_swap: String;
-    match shift_direction {
-        ShiftValues::LeftShift => string_to_swap = left_shift(&right_side, shift_distance),
-        ShiftValues::RightShift => string_to_swap = right_shift(&right_side, shift_distance),
-    }
-    string_to_swap = xor_binary_values(&string_to_swap, key);
-    left_side = xor_binary_values(&left_side, &string_to_swap);
-    let concatenated_strings = concat_strings(&left_side, &right_side);
-    println!("concatenation of string {}", concatenated_strings);
-    swap_sides_of_binary(concatenated_strings)
+    let half_length = binary_string.len() / 2;
+    let (left, right) = binary_string.split_at(half_length);
+    right.to_string() + left
 }
 
 #[derive(Debug)]
-pub enum ShiftValues {
-    LeftShift,
-    RightShift,
+pub enum Direction {
+    Left,
+    Right,
 }
 
 #[cfg(test)]
@@ -304,5 +295,13 @@ mod tests {
         let right_side_of_string: String = get_right_side(&test_string);
         assert_eq!(left_side_of_string, "01011101");
         assert_eq!(right_side_of_string, "11110111");
+    }
+
+    #[test]
+    fn feistel_round_test() {
+        let test_string = String::from("01011101");
+        let feistel_round_result: String =
+            feistel_round_numeric(&test_string, |x| Some(x << 2), "1001");
+        assert_eq!(feistel_round_result, "11011000");
     }
 }
